@@ -1,27 +1,58 @@
 # EasyTransfer
 
-Un Finder pour ton téléphone Android, branché en USB.
+**Un Finder pour ton téléphone Android, branché en USB sur un Mac.**
 
-macOS lit l'Android en MTP : lent, capricieux, et une bonne partie du stockage
-reste invisible. Cette app passe par **adb**, qui voit tout le système de
-fichiers — donc exactement ce que je vois, moi, en ligne de commande.
+macOS ne parle à Android qu'en MTP : lent, capricieux, et une bonne partie du
+stockage reste invisible. EasyTransfer passe par **adb**, qui voit tout le
+système de fichiers — y compris les photos WhatsApp que le Finder ne montre pas.
+
+Parcours tes dossiers, vois toutes tes photos dans une seule galerie, et
+transfère-les sur ton Mac en un clic.
+
+## Installation
+
+Une seule commande à coller dans le Terminal :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Enzoblgz/easytransfer/main/install.sh | bash
+```
+
+Elle installe `adb` si besoin, met le code dans `~/Applications/EasyTransfer`,
+crée un lanceur double-cliquable et active la détection au branchement.
+Rejouable sans risque : relance-la pour mettre à jour.
+
+> Tu préfères lire avant d'exécuter ? [Le script fait 80 lignes](install.sh).
+> Sinon, à la main : `git clone https://github.com/Enzoblgz/easytransfer.git && cd easytransfer && ./easytransfer`
+
+**Rien à installer côté Python** : macOS fournit déjà tout ce qu'il faut,
+l'app n'a aucune dépendance.
+
+### Une seule chose à faire sur le téléphone
+
+Activer le **débogage USB**, sinon le Mac ne pourra pas lire le téléphone :
+
+1. *Paramètres › À propos du téléphone* → taper **7 fois** sur « Numéro de build »
+2. *Paramètres › Options pour les développeurs* → activer **Débogage USB**
+3. Brancher le câble, puis accepter « Autoriser le débogage USB » sur l'écran
 
 ## Lancer
 
-Normalement tu n'as rien à faire : **branche le téléphone**, une fenêtre
-s'ouvre et propose « Ouvrir EasyTransfer ». Voir *Détection automatique* plus bas.
+**Branche simplement le téléphone** : une fenêtre s'ouvre et propose
+« Ouvrir EasyTransfer ».
 
-À la main :
+À la main : double-clic sur `~/Applications/EasyTransfer.command`. Le navigateur
+s'ouvre sur `http://127.0.0.1:8777`, et `Ctrl-C` arrête le serveur.
+
+Si le téléphone n'est pas reconnu, `adb devices` doit afficher une ligne
+`device` — et non `unauthorized` (dans ce cas, déverrouille et accepte l'invite).
+
+## Désinstaller
 
 ```bash
-~/dev/easytransfer/easytransfer
+~/Applications/EasyTransfer/install-watcher.sh uninstall
+rm -rf ~/Applications/EasyTransfer ~/Applications/EasyTransfer.command
+rm -rf ~/.cache/easytransfer ~/.config/easytransfer
 ```
-
-Le navigateur s'ouvre sur `http://127.0.0.1:8777`. `Ctrl-C` pour arrêter.
-
-Prérequis : `adb` (installé), le téléphone déverrouillé, et le **débogage USB**
-autorisé sur le téléphone. S'il n'est pas reconnu, `adb devices` doit afficher
-une ligne `device` (et pas `unauthorized`).
 
 ## Ce que ça fait
 

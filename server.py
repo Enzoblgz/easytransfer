@@ -102,13 +102,20 @@ def choose_folder(start):
 
 # ---------------------------------------------------------------- adb helpers
 
+class AdbMissing(Exception):
+    pass
+
+
 def adb(args, timeout=60, binary=False):
     """Run an adb command, returning stdout (bytes if binary)."""
-    p = subprocess.run(
-        [ADB] + args,
-        capture_output=True,
-        timeout=timeout,
-    )
+    try:
+        p = subprocess.run(
+            [ADB] + args,
+            capture_output=True,
+            timeout=timeout,
+        )
+    except FileNotFoundError:
+        raise AdbMissing(ADB)
     if binary:
         return p.returncode, p.stdout, p.stderr
     return p.returncode, p.stdout.decode("utf-8", "replace"), p.stderr.decode("utf-8", "replace")
@@ -126,7 +133,12 @@ def exec_out(cmd, timeout=180):
 
 
 def device_info():
-    code, out, _ = adb(["devices", "-l"])
+    try:
+        code, out, _ = adb(["devices", "-l"])
+    except AdbMissing:
+        return {"connected": False, "no_adb": True, "error":
+                "adb n'est pas installé. Installe-le avec :  "
+                "brew install android-platform-tools"}
     if code != 0:
         return {"connected": False, "error": "adb unavailable"}
     lines = [l for l in out.splitlines()[1:] if l.strip()]
@@ -825,6 +837,14 @@ def main():
     if "--clear-cache" in sys.argv:
         print(f"\n  Cleared {clear_cache()} cached files.\n")
         return
+
+    if not shutil.which("adb") and not os.path.exists(ADB):
+        print("\n  EasyTransfer ne peut pas démarrer : adb est introuvable.\n")
+        print("  adb est l'outil qui permet au Mac de parler à un téléphone Android.")
+        print("  Installe-le avec Homebrew :\n")
+        print("      brew install android-platform-tools\n")
+        print("  (Homebrew lui-même s'installe depuis https://brew.sh)\n")
+        sys.exit(1)
 
     info = device_info()
     print("\n  EasyTransfer")
