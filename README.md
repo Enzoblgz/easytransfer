@@ -27,8 +27,9 @@ une ligne `device` (et pas `unauthorized`).
 
 - **Trois vues** : Icônes, Liste, et **Galerie** — la galerie balaie tous les
   sous-dossiers d'un coup et trie du plus récent au plus ancien. Sur
-  « Internal storage » ça te donne les 374 photos et vidéos du téléphone
-  dans une seule grille.
+  « Internal storage » ça te donne toutes les photos et vidéos du téléphone dans
+  une seule grille — **y compris celles de WhatsApp, Instagram et Telegram**, qui
+  vivent sous `Android/media/` et n'apparaissent dans aucun dossier classique.
 - **Toute la galerie** : premier favori de la barre latérale — toutes les photos et
   vidéos du téléphone dans une seule grille, sans passer par Screenshots, puis
   Camera, puis WhatsApp.

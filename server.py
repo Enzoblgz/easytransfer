@@ -42,8 +42,16 @@ IMAGE_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif", ".bmp",
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".3gp", ".webm", ".avi", ".m4v"}
 MEDIA_EXT = IMAGE_EXT | VIDEO_EXT
 
-# Android's scoped-storage dirs error out under find and hold no user content.
-SKIP_DIRS = {"Android", "LOST.DIR", ".thumbnails"}
+# Only these are genuinely off-limits or worthless. NOT all of Android/ —
+# /sdcard/Android/media holds real user photos (WhatsApp, Instagram, Telegram
+# put them there on modern Android), and skipping the whole tree hid 657 files.
+SKIP_PATHS = [
+    "/sdcard/Android/data",     # per-app private storage, unreadable without root
+    "/sdcard/Android/obb",      # game asset blobs
+    "/sdcard/Android/.Trash",   # Android's own recycle bin
+    "/sdcard/LOST.DIR",
+]
+SKIP_NAMES = {".thumbnails"}    # media caches, not originals
 
 os.makedirs(CACHE, exist_ok=True)
 
@@ -168,6 +176,17 @@ def safe_path(p):
     return p
 
 
+def prune_expr():
+    """find clauses that skip the unreadable/worthless corners, nothing more."""
+    parts = [f"-path {shlex.quote(p)} -prune -o" for p in SKIP_PATHS]
+    parts += [f"-name {shlex.quote(n)} -prune -o" for n in SKIP_NAMES]
+    return " ".join(parts)
+
+
+def skipped(path):
+    return path in SKIP_PATHS or posixpath.basename(path) in SKIP_NAMES
+
+
 def is_hidden(name):
     # .trashed-* are Android's recycle bin; .pending-* are half-written captures.
     return name.startswith(".") or name.startswith("trashed-") or name.startswith("pending-")
@@ -187,7 +206,7 @@ def listdir(path):
             continue
         kind, size, mtime, name = line.split("|", 3)
         base = posixpath.basename(name)
-        if is_hidden(base) or base in SKIP_DIRS:
+        if is_hidden(base) or skipped(name):
             continue
         isdir = kind.startswith("directory")
         try:
@@ -225,8 +244,7 @@ def scan_media(path, recursive=True):
     q = shlex.quote(path)
     depth = "" if recursive else "-maxdepth 1"
     names = " -o ".join(f"-iname '*{e}'" for e in sorted(MEDIA_EXT))
-    prune = " ".join(f"-name {shlex.quote(d)} -prune -o" for d in SKIP_DIRS)
-    cmd = (f"find -H {q} {depth} {prune} -type f \\( {names} \\) "
+    cmd = (f"find -H {q} {depth} {prune_expr()} -type f \\( {names} \\) "
            f"-exec stat -c '%F|%s|%Y|%n' {{}} + 2>/dev/null")
     code, out, _ = sh(cmd, timeout=180)
     items = []
@@ -471,6 +489,20 @@ def delete_on_phone(path, target):
     return code == 0
 
 
+def rescan_media():
+    """Ask Android to re-index storage after we removed files.
+
+    We delete with rm, which MediaStore doesn't notice, so the phone's Gallery
+    keeps showing tiles for photos that are gone. Best effort: if the command
+    isn't available on this Android version, the entries simply expire later.
+    """
+    try:
+        sh("content call --uri content://media --method scan_volume "
+           "--arg external_primary", timeout=120)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+
 def run_pull(job_id, paths, folder, move=False):
     os.makedirs(folder, exist_ok=True)
     done, failed, freed = 0, [], 0
@@ -513,6 +545,9 @@ def run_pull(job_id, paths, folder, move=False):
                     failed.append(f"{name} (copié, gardé sur le téléphone)")
         with JOBS_LOCK:
             JOBS[job_id].update(done=done, freed=freed)
+
+    if freed:
+        rescan_media()
 
     with JOBS_LOCK:
         state = "cancelled" if JOBS[job_id].get("cancel") else "done"
