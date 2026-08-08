@@ -1,0 +1,21 @@
+#!/bin/bash
+# Launch EasyTransfer and open it in the browser.
+cd "$(dirname "$0")" || exit 1
+PORT="${EASYTRANSFER_PORT:-8777}"
+
+# Maintenance flags go straight through, no server, no browser.
+if [ "$1" = "--clear-cache" ]; then
+  exec python3 server.py --clear-cache
+fi
+
+# Reclaim the port from a previous run so restarts are painless.
+STALE=$(lsof -ti tcp:"$PORT" 2>/dev/null)
+[ -n "$STALE" ] && kill $STALE 2>/dev/null && sleep 1
+
+if ! adb devices | grep -qE '\sdevice$'; then
+  echo "⚠️  No authorized device. Plug the phone in via USB, unlock it,"
+  echo "    and accept the 'Allow USB debugging' prompt."
+fi
+
+(sleep 1.2 && open "http://127.0.0.1:$PORT") &
+exec python3 -u server.py

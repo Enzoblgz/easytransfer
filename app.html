@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EasyTransfer</title>
+<style>
+:root{
+  --bg:#f6f6f7; --sidebar:#ecebef; --panel:#fff; --text:#1d1d1f; --dim:#86868b;
+  --line:#dcdce0; --accent:#0a84ff; --accent-soft:#0a84ff1f; --shadow:0 1px 3px #0000001a;
+  --tile:#fff;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#1e1e1e; --sidebar:#252527; --panel:#1c1c1e; --text:#f2f2f7; --dim:#8e8e93;
+    --line:#3a3a3c; --accent:#0a84ff; --accent-soft:#0a84ff33; --shadow:0 1px 3px #0006;
+    --tile:#2c2c2e;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+  color:var(--text); background:var(--bg); height:100vh; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ---------------------------------------------------------------- layout */
+#app{display:grid;grid-template-columns:220px 1fr;height:100vh}
+
+#sidebar{
+  background:var(--sidebar);border-right:1px solid var(--line);
+  overflow-y:auto;padding:14px 0 30px;user-select:none;
+}
+.dev{padding:2px 16px 16px}
+.dev h1{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.dev p{font-size:11px;color:var(--dim);margin-top:2px}
+.dev .dot{display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:#30d158;margin-right:6px;vertical-align:1px}
+.dev.off .dot{background:#ff453a}
+
+.sec{font-size:11px;font-weight:600;color:var(--dim);padding:12px 16px 5px;letter-spacing:.02em}
+.nav{display:flex;align-items:center;gap:8px;padding:5px 16px;margin:0 8px;
+  width:calc(100% - 16px);text-align:left;
+  border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.nav:hover{background:#8080801f}
+.nav:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.nav.on{background:var(--accent);color:#fff}
+.nav .ic{width:16px;text-align:center;flex:none;font-size:13px}
+
+/* min-height:0 is load-bearing: as a grid item #main defaults to min-height:auto,
+   so it grows to fit the grid instead of being capped at 100vh — which leaves
+   #view unbounded (no scrolling) and pushes #status off the bottom of the screen. */
+#main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--panel)}
+
+/* --------------------------------------------------------------- toolbar */
+#bar{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-bottom:1px solid var(--line);flex:none;
+}
+.nb{display:flex;gap:2px}
+.nb button{width:26px;height:24px;border-radius:5px;color:var(--dim);font-size:14px}
+.nb button:hover:not(:disabled){background:#8080801f;color:var(--text)}
+.nb button:disabled{opacity:.3;cursor:default}
+
+#crumb{flex:1;display:flex;align-items:center;gap:3px;font-size:13px;
+  overflow:hidden;white-space:nowrap;min-width:0}
+#crumb span{color:var(--dim);flex:none}
+#crumb b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+#crumb button{color:var(--dim);border-radius:4px;padding:2px 4px;flex:none}
+#crumb button:hover{color:var(--text);background:#8080801f}
+
+#find{
+  width:150px;padding:4px 9px;border-radius:6px;border:1px solid var(--line);
+  background:var(--bg);color:var(--text);font-size:12px;outline:none;
+}
+#find:focus{border-color:var(--accent)}
+
+.seg{display:flex;background:#8080801f;border-radius:6px;padding:2px}
+.seg button{padding:3px 10px;border-radius:4px;font-size:12px;color:var(--dim)}
+.seg button.on{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+
+.act{padding:5px 12px;border-radius:6px;background:var(--accent);color:#fff;
+  font-size:12px;font-weight:500;white-space:nowrap}
+.act:disabled{opacity:.4;cursor:default}
+
+/* ------------------------------------------------------------------ grid */
+#view{flex:1;min-height:0;overflow-y:auto;padding:16px;position:relative}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:14px}
+
+.tile{position:relative;border-radius:8px;padding:6px;cursor:default;user-select:none}
+.tile.sel{background:var(--accent-soft);outline:1.5px solid var(--accent)}
+.tile .box{
+  aspect-ratio:1;border-radius:6px;background:var(--tile);overflow:hidden;
+  display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);
+}
+.tile img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;
+  transition:opacity .18s ease}
+.tile img.in{opacity:1}
+.tile .ph{font-size:32px;opacity:.5}
+/* Fixed two-line box so a long filename can't push one tile's caption
+   out of step with the rest of the row. */
+.tile .nm{margin-top:6px;font-size:11.5px;text-align:center;line-height:1.3;
+  height:30px;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
+.tile .mt{font-size:10px;color:var(--dim);text-align:center;margin-top:1px}
+.tile .vid{position:absolute;left:12px;bottom:44px;background:#000000a6;color:#fff;
+  border-radius:4px;padding:1px 5px;font-size:10px}
+
+.get{
+  position:absolute;top:11px;right:11px;width:24px;height:24px;border-radius:50%;
+  background:#000000a6;color:#fff;font-size:12px;display:flex;align-items:center;
+  justify-content:center;opacity:0;transition:opacity .12s;backdrop-filter:blur(6px);
+}
+.tile:hover .get{opacity:1}
+.get:hover{background:var(--accent)}
+.get.ok{opacity:1;background:#30d158}
+
+.eye{position:absolute;top:11px;left:11px;width:24px;height:24px;border-radius:50%;
+  background:#000000a6;color:#fff;font-size:11px;display:flex;align-items:center;
+  justify-content:center;opacity:0;transition:opacity .12s;backdrop-filter:blur(6px)}
+.tile:hover .eye{opacity:1}
+.eye:hover{background:var(--accent)}
+
+/* ------------------------------------------------------------------ list */
+#grid.list{display:block}
+#grid.list .tile{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:5px}
+#grid.list .box{width:30px;height:30px;aspect-ratio:auto;flex:none}
+#grid.list .nm{margin:0;height:auto;text-align:left;-webkit-line-clamp:1;flex:1;font-size:12.5px}
+#grid.list .mt{margin:0;width:150px;text-align:right;flex:none}
+#grid.list .get,#grid.list .eye{position:static;opacity:.35;flex:none;
+  background:#8080802e;color:var(--text)}
+#grid.list .tile:hover .get,#grid.list .tile:hover .eye{opacity:1}
+#grid.list .vid{display:none}
+
+/* ----------------------------------------------------------- states/misc */
+#msg{position:absolute;inset:0;display:flex;flex-direction:column;gap:6px;
+  align-items:center;justify-content:center;color:var(--dim);font-size:13px}
+#msg .big{font-size:34px;opacity:.4}
+.spin{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--accent);
+  border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+#status{display:flex;align-items:center;gap:10px;padding:6px 14px;
+  border-top:1px solid var(--line);font-size:11px;color:var(--dim);flex:none}
+#count{flex:none}
+#destwrap{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:7px;
+  min-width:0}
+#destpath{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#destpath b{color:var(--text);font-weight:500}
+#status button{border-radius:5px;padding:2px 8px;font-size:11px;color:var(--accent);
+  flex:none;border:1px solid transparent}
+#status button:hover{background:var(--accent-soft);border-color:var(--accent-soft)}
+#status label{display:flex;align-items:center;gap:4px;flex:none;cursor:pointer;
+  white-space:nowrap}
+#status input{margin:0;cursor:pointer}
+/* Destructive option: make it look like one once it's armed. */
+#movelabel.armed{color:#ff453a;font-weight:600}
+
+/* -------------------------------------------------------------- lightbox */
+#box{position:fixed;inset:0;background:#000000ee;display:none;z-index:50;
+  align-items:center;justify-content:center;backdrop-filter:blur(20px)}
+#box.on{display:flex}
+#box img,#box video{max-width:92vw;max-height:84vh;object-fit:contain;border-radius:4px}
+#box .arw{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;
+  border-radius:50%;background:#ffffff1f;color:#fff;font-size:18px;display:flex;
+  align-items:center;justify-content:center}
+#box .arw:hover{background:#ffffff33}
+#box .l{left:22px} #box .r{right:22px}
+#box .top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;
+  gap:12px;padding:16px 20px;color:#fff}
+#box .top .t{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#box .top button{padding:6px 14px;border-radius:7px;background:#ffffff26;color:#fff;font-size:12px}
+#box .top button:hover{background:#ffffff40}
+#box .top .x{width:30px;height:30px;border-radius:50%;padding:0;font-size:15px}
+#box .load{color:#fff9;font-size:13px}
+
+/* ----------------------------------------------------------------- toast */
+#toast{position:fixed;right:20px;bottom:20px;background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;padding:12px 15px;min-width:250px;
+  box-shadow:0 8px 26px #00000038;display:none;z-index:60}
+#toast.on{display:block}
+#toast .h{font-size:12.5px;font-weight:600;margin-bottom:3px}
+#toast .s{font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#toast .track{height:4px;background:#8080802e;border-radius:2px;margin-top:8px;overflow:hidden}
+#toast .fill{height:100%;background:var(--accent);width:0;transition:width .25s}
+#toast .row{display:flex;align-items:center;gap:12px;margin-top:9px}
+#toast .rev{font-size:11.5px;color:var(--accent);font-weight:500;display:none}
+#toast .rev.on{display:block}
+#toast .cancel{font-size:11.5px;color:#ff453a;font-weight:500;margin-left:auto}
+#toast .cancel.off{display:none}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <aside id="sidebar">
+    <div class="dev off" id="dev">
+      <h1><span class="dot"></span><span id="devname">Connecting…</span></h1>
+      <p id="devsub">reading adb</p>
+    </div>
+    <div id="favs"></div>
+    <div id="roots"></div>
+  </aside>
+
+  <div id="main">
+    <div id="bar">
+      <div class="nb">
+        <button id="back" title="Back">‹</button>
+        <button id="fwd" title="Forward">›</button>
+        <button id="up" title="Enclosing folder">↑</button>
+      </div>
+      <div id="crumb"></div>
+      <input id="find" type="search" placeholder="Search" spellcheck="false">
+      <div class="seg">
+        <button data-v="grid" class="on">Icons</button>
+        <button data-v="list">List</button>
+        <button data-v="gallery">Gallery</button>
+      </div>
+      <button class="act" id="getall">Transfer all</button>
+    </div>
+
+    <div id="view">
+      <div id="grid"></div>
+      <div id="msg"><div class="spin"></div></div>
+    </div>
+
+    <div id="status">
+      <span id="count">—</span>
+      <span id="destwrap">
+        <label id="movelabel" title="Supprimer du téléphone après une copie vérifiée">
+          <input type="checkbox" id="move"> vider le téléphone
+        </label>
+        <label title="Choisir le dossier à chaque transfert">
+          <input type="checkbox" id="ask"> demander à chaque fois
+        </label>
+        <label title="Recréer le nom du dossier du téléphone dans la destination">
+          <input type="checkbox" id="subfolder"> sous-dossier
+        </label>
+        <span id="destpath"></span>
+        <button id="changedest">Modifier…</button>
+        <button id="opendest" title="Ouvrir dans le Finder">↗</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div id="box">
+  <div class="top">
+    <div class="t" id="boxname"></div>
+    <button id="boxget">↓ Transfer</button>
+    <button class="x" id="boxclose">✕</button>
+  </div>
+  <button class="arw l" id="prev">‹</button>
+  <div id="boxbody"><div class="load">Loading…</div></div>
+  <button class="arw r" id="next">›</button>
+</div>
+
+<div id="toast">
+  <div class="h" id="th">Transferring…</div>
+  <div class="s" id="ts"></div>
+  <div class="track"><div class="fill" id="tf"></div></div>
+  <div class="row">
+    <span class="rev" id="tr">Ouvrir dans le Finder →</span>
+    <button class="cancel" id="tc">Annuler</button>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = (p, o) => fetch(p, o).then(r => r.json());
+
+const FAVS = [
+  // Everything photo/video on the phone, in one list — no folder hopping.
+  ['Toute la galerie', '/sdcard',             '🌐', 'gallery'],
+  ['Camera',      '/sdcard/DCIM/Camera',      '📷'],
+  ['Screenshots', '/sdcard/DCIM/Screenshots', '🖼'],
+  ['WhatsApp',    '/sdcard/DCIM/WhatsApp',    '💬'],
+  ['Pictures',    '/sdcard/Pictures',         '🌄'],
+  ['Downloads',   '/sdcard/Download',         '⬇'],
+  ['Movies',      '/sdcard/Movies',           '🎬'],
+];
+const ICON = {folder:'📁', image:'🖼', video:'🎬', file:'📄'};
+
+let state = {path:'/sdcard', items:[], view:'grid', sel:new Set(),
+             hist:['/sdcard'], hi:0, filter:'', lightbox:-1,
+             cfg:{dest:'', subfolder:true, ask:false, resolved:''}};
+
+// Name mirrored inside the destination, e.g. /sdcard/DCIM/Camera -> DCIM_Camera
+const subdirOf = p => p.split('/').filter(Boolean).slice(1).join('_');
+
+async function loadConfig(){
+  state.cfg = await api('/api/config?' + enc({subdir: subdirOf(state.path)}));
+  $('#ask').checked = !!state.cfg.ask;
+  $('#subfolder').checked = !!state.cfg.subfolder;
+  $('#move').checked = !!state.cfg.move;
+  $('#movelabel').classList.toggle('armed', !!state.cfg.move);
+  paintDest();
+}
+
+function paintDest(){
+  const p = state.cfg.resolved || state.cfg.dest || '';
+  const pretty = p.replace(/^\/Users\/[^/]+/, '~');
+  $('#destpath').innerHTML = `→ <b>${escape_(pretty)}</b>`;
+  $('#destpath').title = p;
+}
+
+const fmt = b => b<1024 ? b+' B'
+  : b<1048576 ? (b/1024).toFixed(0)+' KB'
+  : b<1073741824 ? (b/1048576).toFixed(1)+' MB'
+  : (b/1073741824).toFixed(2)+' GB';
+const when = t => new Date(t*1000).toLocaleDateString(undefined,
+  {day:'numeric', month:'short', year:'numeric'});
+const enc = o => new URLSearchParams(o).toString();
+
+// ------------------------------------------------------------------ device
+async function boot(){
+  const d = await api('/api/device');
+  const dev = $('#dev');
+  if(d.connected){
+    dev.classList.remove('off');
+    $('#devname').textContent = `${d.brand} ${d.model}`.trim();
+    $('#devsub').textContent = `Android ${d.android} · ${d.storage||''}`;
+  } else {
+    $('#devname').textContent = 'No device';
+    $('#devsub').textContent = d.error || '';
+    $('#msg').innerHTML = `<div class="big">📱</div><div>${d.error||'Not connected'}</div>`;
+    return;
+  }
+
+  $('#favs').innerHTML = '<div class="sec">Favorites</div>' + FAVS.map(([n,p,i,v]) =>
+    `<button class="nav" data-p="${p}"${v ? ` data-v="${v}"` : ''}>` +
+    `<span class="ic">${i}</span>${n}</button>`).join('');
+
+  const r = await api('/api/ls?' + enc({path:'/sdcard'}));
+  $('#roots').innerHTML = '<div class="sec">On the phone</div>' +
+    `<button class="nav" data-p="/sdcard"><span class="ic">📱</span>Internal storage</button>` +
+    r.items.filter(i => i.dir).map(i =>
+      `<button class="nav" data-p="${escape_(i.path)}"><span class="ic">📂</span>${escape_(i.name)}</button>`).join('');
+
+  document.querySelectorAll('.nav').forEach(n => n.onclick = () => {
+    // A favourite may carry its own view (Toute la galerie forces Gallery).
+    if(n.dataset.v) setView(n.dataset.v);
+    go(n.dataset.p);
+  });
+  await loadConfig();
+  go('/sdcard/DCIM/Camera');
+}
+
+// --------------------------------------------------------------- navigate
+function go(path, push = true){
+  if(push && path !== state.path){
+    state.hist = state.hist.slice(0, state.hi + 1);
+    state.hist.push(path);
+    state.hi = state.hist.length - 1;
+  }
+  state.path = path;
+  state.sel.clear();
+  loadConfig();          // the resolved destination depends on the folder
+  load();
+}
+
+async function load(){
+  const gallery = state.view === 'gallery';
+  $('#grid').innerHTML = '';
+  $('#msg').style.display = 'flex';
+  $('#msg').innerHTML = '<div class="spin"></div>';
+  crumbs();
+  document.querySelectorAll('.nav').forEach(n =>
+    n.classList.toggle('on', n.dataset.p === state.path));
+
+  const url = gallery
+    ? '/api/scan?' + enc({path:state.path})
+    : '/api/ls?' + enc({path:state.path, counts:1});
+  let r;
+  try { r = await api(url); }
+  catch(e){ return fail('Could not read that folder'); }
+  if(r.error) return fail(r.error);
+
+  state.items = r.items;
+  render();
+}
+
+function fail(m){
+  $('#msg').style.display = 'flex';
+  $('#msg').innerHTML = `<div class="big">⚠️</div><div>${m}</div>`;
+  $('#status').textContent = '—';
+}
+
+function crumbs(){
+  const parts = state.path.split('/').filter(Boolean);
+  const c = $('#crumb'); c.innerHTML = '';
+  let acc = '';
+  parts.forEach((p, i) => {
+    acc += '/' + p;
+    const label = p === 'sdcard' ? 'Internal storage' : p;
+    if(i) c.insertAdjacentHTML('beforeend', '<span>›</span>');
+    if(i === parts.length - 1){
+      c.insertAdjacentHTML('beforeend', `<b>${label}</b>`);
+    } else {
+      const b = document.createElement('button');
+      b.textContent = label;
+      const target = acc;
+      b.onclick = () => go(target);
+      c.appendChild(b);
+    }
+  });
+  $('#back').disabled = state.hi <= 0;
+  $('#fwd').disabled = state.hi >= state.hist.length - 1;
+  $('#up').disabled = state.path === '/sdcard';
+}
+
+// ----------------------------------------------------------------- render
+let io;
+function render(){
+  const g = $('#grid');
+  g.className = state.view === 'list' ? 'list' : '';
+  const f = state.filter.toLowerCase();
+  const items = f ? state.items.filter(i => i.name.toLowerCase().includes(f)) : state.items;
+
+  if(io) io.disconnect();
+  g.innerHTML = '';
+
+  if(!items.length){
+    $('#msg').style.display = 'flex';
+    $('#msg').innerHTML = `<div class="big">📂</div><div>${f ? 'No match' : 'Empty folder'}</div>`;
+    tally(items);
+    return;
+  }
+  $('#msg').style.display = 'none';
+
+  const frag = document.createDocumentFragment();
+  items.forEach((it, idx) => frag.appendChild(tile(it, idx)));
+  g.appendChild(frag);
+
+  // Thumbnails load only as tiles reach the viewport — this is what keeps
+  // a 500-photo folder scrolling smoothly over USB.
+  io = new IntersectionObserver(es => {
+    es.forEach(e => {
+      if(!e.isIntersecting) return;
+      io.unobserve(e.target);
+      const img = e.target.querySelector('img[data-src]');
+      if(!img) return;
+      img.src = img.dataset.src;
+      delete img.dataset.src;
+      img.onload = () => img.classList.add('in');
+      img.onerror = () => {
+        const ph = document.createElement('div');
+        ph.className = 'ph';
+        ph.textContent = ICON[e.target.dataset.kind] || '📄';
+        img.replaceWith(ph);
+      };
+    });
+  }, {rootMargin:'400px'});
+  g.querySelectorAll('.tile').forEach(t => io.observe(t));
+
+  tally(items);
+}
+
+function tile(it, idx){
+  const el = document.createElement('div');
+  el.className = 'tile';
+  el.dataset.idx = idx;
+  el.dataset.kind = it.kind;
+  const media = it.kind === 'image' || it.kind === 'video';
+
+  const thumb = media
+    ? `<img data-src="/api/thumb?${enc({path:it.path, mtime:it.mtime, size:it.size, kind:it.kind})}" alt="">`
+    : `<div class="ph">${ICON[it.kind] || '📄'}</div>`;
+
+  const meta = it.dir
+    ? (it.count != null ? `${it.count} item${it.count === 1 ? '' : 's'}` : 'Folder')
+    : `${fmt(it.size)} · ${when(it.mtime)}`;
+
+  el.innerHTML =
+    `<div class="box">${thumb}</div>` +
+    (it.kind === 'video' ? '<div class="vid">▶</div>' : '') +
+    `<div class="nm">${escape_(it.name)}</div><div class="mt">${meta}</div>` +
+    (it.dir ? '' : '<button class="get" title="Transférer vers le Mac">↓</button>') +
+    (media ? '<button class="eye" title="Aperçu (barre d\'espace)">👁</button>' : '');
+
+  el.onclick = e => {
+    if(e.target.closest('.get') || e.target.closest('.eye')) return;
+    pick(idx, e);
+  };
+  el.ondblclick = () => open_(idx);
+  const g = el.querySelector('.get');
+  if(g) g.onclick = e => { e.stopPropagation(); transfer([it], g); };
+  const eye = el.querySelector('.eye');
+  if(eye) eye.onclick = e => { e.stopPropagation(); lightbox(idx); };
+  return el;
+}
+
+const escape_ = s => s.replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function pick(idx, e){
+  if(e.metaKey || e.ctrlKey){
+    state.sel.has(idx) ? state.sel.delete(idx) : state.sel.add(idx);
+  } else if(e.shiftKey && state.sel.size){
+    const last = Math.max(...state.sel);
+    const [a, b] = [Math.min(last, idx), Math.max(last, idx)];
+    for(let i = a; i <= b; i++) state.sel.add(i);
+  } else {
+    state.sel.clear();
+    state.sel.add(idx);
+  }
+  paint();
+}
+
+function paint(){
+  document.querySelectorAll('.tile').forEach(t =>
+    t.classList.toggle('sel', state.sel.has(+t.dataset.idx)));
+  tally();
+}
+
+function shown(){
+  const f = state.filter.toLowerCase();
+  return f ? state.items.filter(i => i.name.toLowerCase().includes(f)) : state.items;
+}
+
+function tally(items){
+  items = items || shown();
+  const media = items.filter(i => !i.dir);
+  const bytes = media.reduce((a, i) => a + i.size, 0);
+  let s = `${items.length} item${items.length === 1 ? '' : 's'}`;
+  if(media.length) s += ` · ${fmt(bytes)}`;
+  if(state.sel.size) s += ` · ${state.sel.size} selected`;
+  $('#count').textContent = s;
+  const n = state.sel.size ? state.sel.size : media.length;
+  $('#getall').textContent = state.sel.size ? `Transfer ${n}` : `Transfer all ${n}`;
+  $('#getall').disabled = !n;
+}
+
+function open_(idx){
+  const it = shown()[idx];
+  if(!it) return;
+  if(it.dir) return go(it.path);
+  if(it.kind === 'image' || it.kind === 'video') lightbox(idx);
+}
+
+// -------------------------------------------------------------- lightbox
+function lightbox(idx){
+  const list = shown();
+  const it = list[idx];
+  if(!it || it.dir) return;
+  state.lightbox = idx;
+  $('#box').classList.add('on');
+  $('#boxname').textContent = `${it.name} — ${fmt(it.size)} · ${when(it.mtime)}`;
+  const src = '/api/file?' + enc({path:it.path, mtime:it.mtime, size:it.size});
+  const body = $('#boxbody');
+  body.innerHTML = '<div class="load">Loading from phone…</div>';
+  if(it.kind === 'video'){
+    body.innerHTML = `<video src="${src}" controls autoplay playsinline></video>`;
+  } else {
+    const img = new Image();
+    img.onload = () => { body.innerHTML = ''; body.appendChild(img); };
+    img.onerror = () => body.innerHTML = '<div class="load">Could not load</div>';
+    img.src = src;
+  }
+  $('#boxget').onclick = () => transfer([it], $('#boxget'));
+}
+
+function step(d){
+  const list = shown();
+  let i = state.lightbox;
+  for(let n = 0; n < list.length; n++){
+    i = (i + d + list.length) % list.length;
+    if(!list[i].dir && (list[i].kind === 'image' || list[i].kind === 'video')){
+      return lightbox(i);
+    }
+  }
+}
+const shut = () => { $('#box').classList.remove('on'); $('#boxbody').innerHTML = ''; };
+
+// -------------------------------------------------------------- transfers
+async function transfer(items, btn){
+  if(!items.length) return;
+  const subdir = subdirOf(state.path);
+
+  // "Ask every time" opens the native picker; cancelling calls off the transfer.
+  let folder = null;
+  if(state.cfg.ask){
+    const pick = await api('/api/choose-folder', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({start: state.cfg.dest}),
+    });
+    if(pick.cancelled || !pick.folder) return;
+    folder = pick.folder;
+  }
+
+  if(btn){ btn.disabled = true; }
+  const r = await api('/api/pull', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({paths: items.map(i => i.path), subdir, folder}),
+  });
+  if(r.error){ if(btn) btn.disabled = false; return; }
+
+  const t = $('#toast'); t.classList.add('on');
+  $('#tr').classList.remove('on');
+  $('#tc').classList.remove('off');
+  $('#tc').onclick = () => api('/api/cancel', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: r.id}),
+  });
+  const dest = (r.folder || '').replace(/^\/Users\/[^/]+/, '~');
+  const poll = setInterval(async () => {
+    const j = await api('/api/job?id=' + r.id);
+    const pct = j.total ? Math.round(j.done / j.total * 100) : 0;
+    $('#tf').style.width = pct + '%';
+    const over = j.state === 'done' || j.state === 'cancelled';
+    $('#th').textContent = j.state === 'cancelled'
+      ? `Transfert annulé — ${j.done} sur ${j.total} conservé${j.done > 1 ? 's' : ''}`
+      : over
+        ? `${j.done - (j.failed?.length || 0)} sur ${j.total} transféré${j.total > 1 ? 's' : ''}`
+        : `Transfert ${j.done + 1} sur ${j.total}…`;
+    // Always say where the files are going — that was the confusing part.
+    $('#ts').textContent = over
+      ? `→ ${dest}${j.freed ? ` · ${fmt(j.freed)} libérés sur le téléphone` : ''}`
+      : (j.current || '');
+    if(over){
+      clearInterval(poll);
+      $('#tc').classList.add('off');
+      if(btn){
+        btn.disabled = false;
+        // Only claim success when it actually succeeded.
+        if(btn.classList.contains('get') && j.state === 'done'){
+          btn.classList.add('ok'); btn.textContent = '✓';
+          setTimeout(() => { btn.classList.remove('ok'); btn.textContent = '↓'; }, 1800);
+        }
+      }
+      if(j.failed?.length) $('#ts').textContent = `${j.failed.length} échec(s) · → ${dest}`;
+      const rev = $('#tr'); rev.classList.add('on');
+      rev.onclick = () => api('/api/reveal', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({folder: j.folder}),
+      });
+      setTimeout(() => t.classList.remove('on'), 6000);
+    }
+  }, 400);
+}
+
+// ----------------------------------------------------------------- events
+$('#back').onclick = () => { if(state.hi > 0){ state.hi--; go(state.hist[state.hi], false); } };
+$('#fwd').onclick  = () => { if(state.hi < state.hist.length - 1){ state.hi++; go(state.hist[state.hi], false); } };
+$('#up').onclick   = () => { const p = state.path.replace(/\/[^/]+$/, ''); if(p.startsWith('/sdcard')) go(p); };
+
+$('#find').oninput = e => { state.filter = e.target.value; state.sel.clear(); render(); };
+
+function setView(v, reload = false){
+  document.querySelectorAll('.seg button').forEach(x =>
+    x.classList.toggle('on', x.dataset.v === v));
+  const was = state.view;
+  state.view = v;
+  state.sel.clear();
+  if(!reload) return;
+  // Gallery pulls a different (recursive) dataset, so it needs a refetch.
+  (was === 'gallery' || v === 'gallery') ? load() : render();
+}
+
+document.querySelectorAll('.seg button').forEach(b =>
+  b.onclick = () => setView(b.dataset.v, true));
+
+$('#getall').onclick = () => {
+  const list = shown();
+  const items = state.sel.size
+    ? [...state.sel].map(i => list[i]).filter(i => i && !i.dir)
+    : list.filter(i => !i.dir);
+  transfer(items, $('#getall'));
+};
+
+// ---- destination controls
+async function setCfg(patch){
+  state.cfg = await api('/api/config', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(patch),
+  });
+  await loadConfig();
+}
+$('#ask').onchange       = e => setCfg({ask: e.target.checked});
+$('#move').onchange = e => {
+  // Arming a delete deserves one deliberate confirmation, not a silent toggle.
+  if(e.target.checked && !confirm(
+      "Vider le téléphone ?\n\n" +
+      "Chaque fichier transféré sera SUPPRIMÉ du téléphone, " +
+      "mais seulement après vérification que la copie sur le Mac est complète " +
+      "(taille identique à l'octet près).\n\n" +
+      "En cas du moindre doute, l'original est conservé.")){
+    e.target.checked = false;
+    return;
+  }
+  setCfg({move: e.target.checked});
+};
+$('#subfolder').onchange = e => setCfg({subfolder: e.target.checked});
+$('#changedest').onclick = async () => {
+  const r = await api('/api/choose-folder', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({start: state.cfg.dest, save: true}),
+  });
+  if(r.folder) loadConfig();
+};
+$('#opendest').onclick = () => api('/api/reveal', {
+  method:'POST', headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({folder: state.cfg.resolved || state.cfg.dest}),
+});
+
+$('#boxclose').onclick = shut;
+$('#prev').onclick = () => step(-1);
+$('#next').onclick = () => step(1);
+$('#box').onclick = e => { if(e.target.id === 'box') shut(); };
+
+document.onkeydown = e => {
+  if($('#box').classList.contains('on')){
+    if(e.key === 'Escape' || e.key === ' ') { e.preventDefault(); shut(); }
+    if(e.key === 'ArrowLeft') step(-1);
+    if(e.key === 'ArrowRight') step(1);
+    return;
+  }
+  if(e.target.tagName === 'INPUT') return;
+  // Space = Quick Look, the same reflex as in Finder.
+  if(e.key === ' '){
+    e.preventDefault();
+    if(state.sel.size) open_(Math.min(...state.sel));
+    return;
+  }
+  if((e.metaKey || e.ctrlKey) && e.key === 'a'){
+    e.preventDefault();
+    shown().forEach((_, i) => state.sel.add(i));
+    paint();
+  }
+  if(e.key === 'Enter' && state.sel.size === 1) open_([...state.sel][0]);
+  if(e.key === 'Backspace' && e.metaKey) $('#up').click();
+};
+
+boot();
+</script>
+</body>
+</html>
